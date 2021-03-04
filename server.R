@@ -807,6 +807,10 @@ t_text_noprops<-p("Please make sure you've entered both values, that both values
 
 shinyServer(function(input, output, clientData, session) {
   
+  location / {
+    app_idle_timeout 0;
+}
+  
   buttons<-reactiveValues(next_tab=0, enter_minimax=0, enter_plot=0, show_plot=0, next_que1=0, fback_que2=0, saves=0, skip_que1=rep(0,n_que))
   elic<-reactiveValues(mini=9, maxi=17, height=rep(0,10), value=9:18, probs=rep(0,10), conds=0, quant1=rep(0,n_que), quant2=rep(0,n_que), quant3=rep(0,n_que), prop_min=20, prop_max=40, gamma1=rep(0,2), gamma2=rep(0,2), upper1=0, upper2=0, que1=1, que2=1, part2=1)
   hist<-reactiveValues(lower=8, upper=18, nhigh=20, nbins=10, lbins=seq(8,17,1), rbins=seq(9,18,1), width=1, nchip=20)
