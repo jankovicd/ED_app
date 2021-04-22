@@ -5,7 +5,7 @@ library(rdrop2)
 
 is_local <- Sys.getenv('SHINY_PORT') == ""
 if (is_local) {
-  setwd('H:/ED app')
+  setwd('H:/ED_app')
 }
 
 ######## functions ########
@@ -349,35 +349,14 @@ f_saveData <- function(data,name1) {
   drop_upload(filePath, path = outputDir, dtoken = token)
 }
 
-# f_loadData <- function() {
-#   # Read all the files into a list
-#   filesInfo <- drop_dir(outputDir)
-#   filePaths <- filesInfo$path_display
-#   data <- lapply(filePaths, drop_read_csv, stringsAsFactors = FALSE)
-#   # Concatenate all data together into one data.frame
-#   data <- do.call(rbind, data)
-#   data
-# }
+f_save_local <- function(object,filename){
+  write.csv(object, filename, row.names = FALSE)
+}
 
-# f_loadData <- function(filename) {
-#     # Read all the files into a list
-#     filesInfo <- subset(drop_dir(outputDir), name=filename)
-#     filePaths <- filesInfo$path_display
-#     data <- lapply(filePaths, drop_read_csv, stringsAsFactors = FALSE)
-#     # Concatenate all data together into one data.frame
-#     #data <- do.call(rbind, data)
-#     data
-# }
+f_load_local <- function(filename){
+  read.csv(filename,header=FALSE)
+}
 
-# f_loadData <- function(filename) {
-#   # Read all the files into a list
-#   filesInfo <- drop_dir(outputDir)
-#   filePaths <- paste(filesInfo$path_display,filename,sep="")
-#   data <- lapply(filePaths, drop_read_csv, stringsAsFactors = FALSE)
-#   # Concatenate all data together into one data.frame
-#   data <- do.call(rbind, data)
-#   data
-# }
 
 #### plot functions ####
 
@@ -554,12 +533,35 @@ t_introduction<-
       column(9,"Please click on Next to continue."),
       column(2,f_nexttab("Next"))))
 
+
 t_session_timeout<-p(
   br(), br(),
-  fluidRow(
-    column(9, "If you had already started completing the exercise but the web page had 'expired', please click here to continue from where you left off."),
-    column(2, actionButton("session_timeout","Reload",width='120px', style="background-color: lightgrey"))), br()
-  )
+  "Is this the first time you are attempting this exercise?",
+  radioButtons("radio_skip_que1"," ",c("Yes"=1, "No"=2),selected=integer(0)),
+  fluidRow(column(1,offset=2,actionButton("new_expert", "Enter", width='120px', style="background-color: lightgrey")))
+)
+
+t_session_timeout_new2<-p(
+  br(),
+  "Please enter your unique pass code to proceed from where you left off. This is the code you were provided at the start of your first session.", br(),br(),
+  "If you do not have the password, please email dina.jankovic@york.ac.uk with subject line 'ED elicitation' or start the exercise from the beginning.",
+  textInput("password", "", value="", width='710px'), 
+  fluidRow(column(2,offset = 9, f_nexttab("Next"))),
+  br(), br()
+  
+)
+
+f_session_timeout_new1<-function(a)
+  
+    (p("Your unique pass code for this session is ",strong(a),". Please write it down, as you will need to enter it if you need to sign in again.", sep=""))
+    
+
+# t_session_timeout<-p(
+#   br(), br(),
+#   fluidRow(
+#     column(9, "If you had already started completing the exercise but the web page had 'expired', please click here to continue from where you left off."),
+#     column(2, actionButton("session_timeout","Reload",width='120px', style="background-color: lightgrey"))), br()
+#   )
 
 t_part1<-p(
   br(),
@@ -807,99 +809,153 @@ t_text_noprops<-p("Please make sure you've entered both values, that both values
 
 shinyServer(function(input, output, clientData, session) {
   
-   session$allowReconnect(TRUE)
+  # location / {
+  #   app_idle_timeout 0;
+  # }
   
-  buttons<-reactiveValues(next_tab=0, enter_minimax=0, enter_plot=0, show_plot=0, next_que1=0, fback_que2=0, saves=0, skip_que1=rep(0,n_que))
+  #session$allowReconnect(TRUE)
+  
+  buttons<-reactiveValues(next_tab=-1, enter_minimax=0, enter_plot=0, show_plot=0, next_que1=0, fback_que2=0, saves=0, skip_que1=rep(0,n_que), first_time=0, old_password=0)
   elic<-reactiveValues(mini=9, maxi=17, height=rep(0,10), value=9:18, probs=rep(0,10), conds=0, quant1=rep(0,n_que), quant2=rep(0,n_que), quant3=rep(0,n_que), prop_min=20, prop_max=40, gamma1=rep(0,2), gamma2=rep(0,2), upper1=0, upper2=0, que1=1, que2=1, part2=1)
   hist<-reactiveValues(lower=8, upper=18, nhigh=20, nbins=10, lbins=seq(8,17,1), rbins=seq(9,18,1), width=1, nchip=20)
   cond<-reactiveValues(all_chips_1=0, all_chips_2=0, prop_min_max=0, good_fit1=1, good_fit2=1, mid_props=0)
+  pros<-reactiveValues(password = round(runif(1,0,1000000),digits=0), correct = 0, save_tab=c(0,0))
 
   
-  # observeEvent(input$session_timeout,{
-  #   
-  #   if(!file.exists(paste(drop_dir(outputDir), "/", password_saves,"_last_tab.csv",sep=""))) {
-  #     
-  #     buttons$next_tab <- 1
-  #     
-  #   } else {
-  #     
-  #     # if(file.exists(paste(drop_dir(outputDir), "/", password_saves,"_means_for_part2.csv",sep=""))){
-  #     #   
-  #     #   #elic$quant2 <- f_loadData(paste("/",password_saves, "_means_for_part2.csv", sep=""))
-  #     #   #elic$skip_que1 <- f_loadData(paste("/",password_saves, "_relevant_tasks.csv", sep=""))
-  #     #   elic$quant2 <- drop_read_csv(paste(password_saves, "_means_for_part2.csv", sep=""))
-  #     #   elic$skip_que1 <- drop_read_csv(paste(password_saves, "_relevant_tasks.csv", sep=""))
-  #     #   
-  #     # } else {
-  #       
-  #       elic$quant2 <- rep(0,n_que)
-  #       elic$skip_que1 <- rep(0,n_que)
-  #       
-  #     #}
-  #     
-  #     #temp <-  f_loadData(paste("/",password_saves, "_last_tab.csv", sep=""))
-  #     temp <-  drop_read_csv(paste(password_saves, "_last_tab.csv", sep=""))
-  #     
-  #     if (temp[1] == 3){
-  #       
-  #       buttons$next_tab <- 3
-  #       
-  #     } else if(temp[1] == 7){
-  #       
-  #       elic$que1 <-   temp [2] + 1
-  #       
-  #       if(elic$que1>=22){
-  #         
-  #         buttons$next_tab <- 8
-  #         
-  #       } else {
-  #         
-  #         buttons$next_tab <-  7
-  #         buttons$enter_minimax<-0
-  #         buttons$enter_plot<-0
-  #         buttons$show_plot<-0
-  #         elic$mini<-integer(0)
-  #         elic$maxi<-integer(0)          
-  #         
-  #       }
-  # 
-  #       
-  #     } else if (temp[1]==11){
-  #       
-  #       elic$que2 <-   temp [2] + 1
-  #       
-  #       if(elic$que2>=22){
-  #         
-  #         buttons$next_tab <- 12
-  #         
-  #       } else {
-  #         
-  #         buttons$next_tab <- 11
-  #         elic$prop_min <- integer(0)
-  #         elic$prop_max <- integer(0)
-  #         elic$upper1 <- 0
-  #         elic$upper2 <- 0
-  #         cond$good_fit2 <- 0
-  #         
-  #       }
-  #       
-  #     }
-  #     
-  #     }
-  #   
-  # })
-  
+  observeEvent(input$new_expert,{#?????make sure they can't go forward without choosing or they start from the beginning if they don't enter password
+    
+    if (length(input$radio_skip_que1)==1) {
+      
+      buttons$first_time<-ifelse(input$radio_skip_que1==1,1,2)
+      
+    }
+    
+  })
   
   observeEvent(input$next_tab,{
     
-    if(buttons$next_tab==0|buttons$next_tab>2){
+    if(buttons$next_tab==-1){
       
+      if (buttons$first_time==1) {
+        
+        temptemp<-1
+        #f_saveData(c(0,0), paste(pros$password,"_last_tab.csv", sep=""))
+        f_save_local(c(0,0), paste(pros$password,"_last_tab.csv", sep=""))
+        
+      } else {
+        
+        buttons$old_password<-input$password
+        pros$password<-buttons$old_password
+        #temp<-unlist(f_loadData(paste0(pros$password,"_last_tab.csv")))#download last tab
+        #temp<-unlist(f_load_local(paste0(pros$password,"_last_tab.csv")))
+        #pros$correct <- ifelse(temp==999999,999999,0)
+        #pros$correct <- ifelse(length(temp)==0,999999,0)
+        if(file.exists(paste0(pros$password,"_last_tab.csv"))){
+          #temp<- f_load_local(paste0(pros$password,"_last_tab.csv"))[2:3,1]
+          pros$save_tab<-as.numeric(f_load_local(paste0(pros$password,"_last_tab.csv"))[2:3,1])
+        } else {
+          pros$correct <- 999999
+        }
+        #f_save_local(pros$correct, paste0(pros$correct,".csv"))##zzzzzzz
+
+        if(pros$correct != 999999){ 
+          
+          if(pros$save_tab[1] <= 3){
+            
+            buttons$next_tab <- pros$save_tab[1]
+            
+            } else if(pros$save_tab[1] == 7){
+                 
+                 elic$que1 <-   pros$save_tab[2] + 1
+                 
+                 if(elic$que1>n_que){
+                   
+                   buttons$next_tab <- 8
+                   
+                 } else {
+                   
+                   buttons$next_tab <-  7
+                   buttons$enter_minimax<-0
+                   buttons$enter_plot<-0
+                   buttons$show_plot<-0
+                   elic$mini<-integer(0)
+                   elic$maxi<-integer(0)          
+                   
+                 }
+                 
+                 if(file.exists(paste0(pros$password, "_means_for_part2.csv"))){
+                 
+                   elic$quant2[1:n_que] <- as.numeric(f_load_local(paste0(pros$password, "_means_for_part2.csv"))[2:(n_que+1),1])
+                   elic$quant1[1:n_que] <- as.numeric(f_load_local(paste0(pros$password, "_lows_for_part2.csv"))[2:(n_que+1),1])
+                   elic$quant3[1:n_que] <- as.numeric(f_load_local(paste0(pros$password, "_highs_for_part2.csv"))[2:(n_que+1),1])
+                   buttons$skip_que1[1:n_que] <- as.numeric(f_load_local(paste0(pros$password, "_relevant_tasks.csv"))[2:(n_que+1),1])
+                     
+                 } else {
+                   
+                   elic$quant1[1:n_que] <- rep(0,n_que)
+                   elic$quant2[1:n_que] <- rep(0,n_que)
+                   elic$quant3[1:n_que] <- rep(0,n_que)
+                   buttons$skip_que1[1:n_que] <- rep(0,n_que)
+                 }
+ 
+               } else if (pros$save_tab[1]>=8){
+                 
+                 if(file.exists(paste0(pros$password, "_means_for_part2.csv"))){
+                   
+                   elic$quant2 <- as.numeric(f_load_local(paste0(pros$password, "_means_for_part2.csv"))[2:(n_que+1),1])
+                   elic$quant1 <- as.numeric(f_load_local(paste0(pros$password, "_lows_for_part2.csv"))[2:(n_que+1),1])
+                   elic$quant3 <- as.numeric(f_load_local(paste0(pros$password, "_highs_for_part2.csv"))[2:(n_que+1),1])
+                   buttons$skip_que1 <-as.numeric(f_load_local(paste0(pros$password, "_relevant_tasks.csv"))[2:(n_que+1),1])
+                   
+                   elic$que2 <- which(buttons$skip_que1==1&(1:n_que)>pros$save_tab[2])[1]
+                   elic$part2<-sum(buttons$skip_que1[1:elic$que2])
+                   
+                 } else {
+                   
+                   elic$quant1[1:n_que] <- rep(0,n_que)
+                   elic$quant2[1:n_que] <- rep(0,n_que)
+                   elic$quant3[1:n_que] <- rep(0,n_que)
+                   buttons$skip_que1[1:n_que] <- rep(0,n_que)
+                 }
+                 
+                 if(elic$que2>n_que){
+                   
+                   buttons$next_tab <- 12
+                   
+                 } else {
+                   
+                   buttons$next_tab <- pros$save_tab[1]
+                   elic$prop_min <- integer(0)
+                   elic$prop_max <- integer(0)
+                   elic$upper1 <- 0
+                   elic$upper2 <- 0
+                   cond$good_fit2 <- 0
+                   
+                 }
+                 
+               }
+            
+        }
+        
+        temptemp<-0
+        
+      }
+      
+      } else if (buttons$next_tab==0|buttons$next_tab>2){
+        
       temptemp<-1
+      
+      if(buttons$next_tab==0){
+        
+        f_save_local(c(1,0), paste(pros$password,"_last_tab.csv", sep=""))
+        
+      } 
       
     } else if (buttons$next_tab==1) {
       
       if(input$consent==1){
         temptemp<-1
+        f_save_local(c(2,0), paste(pros$password,"_last_tab.csv", sep=""))
       } else {
         temptemp<-0
       }
@@ -907,21 +963,21 @@ shinyServer(function(input, output, clientData, session) {
     } else if (buttons$next_tab==2) {
       
       if (length(input$role)>0){
-        f_saveData(c(input$role,input$role_other), paste(password_saves,"_role.csv",sep=""))
-        f_saveData(c(3,0), paste(password_saves,"_last_tab.csv", sep=""))
+        f_saveData(c(input$role,input$role_other), paste(pros$password,"_role.csv",sep=""))
+        f_save_local(c(input$role,input$role_other), paste(pros$password,"_role.csv",sep=""))
+        f_save_local(c(3,0), paste(pros$password,"_last_tab.csv", sep=""))
         temptemp<-1
       } else {
         temptemp<-0
       }
       
     }
-
     
     if(temptemp==1){
       
-      temp<-buttons$next_tab; buttons$next_tab<-temp+1
+      tempvar<-buttons$next_tab; buttons$next_tab<-tempvar+1
       
-      if(temp>5){
+      if(buttons$next_tab>6){
         buttons$enter_minimax<-0
         buttons$enter_plot<-0
         buttons$show_plot<-0
@@ -931,7 +987,11 @@ shinyServer(function(input, output, clientData, session) {
         elic$maxi<-integer(0)
       }
       
-      if(temp>9){
+      if(buttons$next_tab==9){
+        f_save_local(c(8,0), paste(pros$password,"_last_tab.csv", sep=""))
+      }
+      
+      if(buttons$next_tab>10){
         elic$prop_min<-integer(0)
         elic$prop_max<-integer(0)
         elic$upper1<-0
@@ -942,10 +1002,6 @@ shinyServer(function(input, output, clientData, session) {
 
     })
   
-  # observeEvent(input$enter_minimax,{
-  #   temp<-buttons$enter_minimax; buttons$enter_minimax<-temp+1
-  #   elic$mini<-input$min; elic$maxi<-input$max
-  #   })
   
   observeEvent(input$enter_plot,{
     
@@ -963,12 +1019,11 @@ shinyServer(function(input, output, clientData, session) {
       
     }
     
-  }) #xxxxx ideally buttons$enter_plot goes to 0 when chips are removed.
+  }) 
   
   observeEvent(input$show_plot,{
     temp<-buttons$show_plot; buttons$show_plot<-temp+1
     buttons$enter_plot<-0
-    #buttons$show_que2<-0
   })
   
   observeEvent(input$skip_que1,{
@@ -978,7 +1033,8 @@ shinyServer(function(input, output, clientData, session) {
       if(input$radio_skip_que1==1){
         
         buttons$skip_que1[elic$que1]<-1
-        f_saveData(buttons$skip_que1,paste(password_saves,"_relevant_tasks.csv", sep=""))
+        f_saveData(buttons$skip_que1,paste(pros$password,"_relevant_tasks.csv", sep=""))
+        f_save_local(buttons$skip_que1,paste(pros$password,"_relevant_tasks.csv", sep=""))
         
       } else if (input$radio_skip_que1==2){
         
@@ -1009,16 +1065,22 @@ shinyServer(function(input, output, clientData, session) {
     
     if(cond$all_chips_2==1){
       
-      f_saveData(c(elic$mini, elic$maxi, elic$value, elic$height),paste(password_saves, "_part1_que", elic$que1,".csv", sep=""))
-      f_saveData(c(7,elic$que1), paste(password_saves,"_last_tab.csv", sep=""))
+      f_saveData(c(elic$mini, elic$maxi, elic$value, elic$height),paste(pros$password, "_part1_que", elic$que1,".csv", sep=""))
+      f_save_local(c(7,elic$que1), paste(pros$password,"_last_tab.csv", sep=""))
       
       if(length(input$comment_que1)>0){
         if(input$comment_que1!=""){
-          f_saveData(input$comment_que1,paste(password_saves, "_comment_part1_que", elic$que1,".csv", sep=""))
+          f_saveData(input$comment_que1,paste(pros$password, "_comment_part1_que", elic$que1,".csv", sep=""))
         }
       }
       
-      f_saveData(elic$quant2,paste(password_saves,"_means_for_part2.csv", sep=""))
+      f_saveData(elic$quant2,paste(pros$password,"_means_for_part2.csv", sep=""))
+      f_saveData(elic$quant1,paste(pros$password,"_lows_for_part2.csv", sep=""))
+      f_saveData(elic$quant3,paste(pros$password,"_highs_for_part2.csv", sep=""))
+      f_save_local(elic$quant2,paste(pros$password,"_means_for_part2.csv", sep=""))
+      f_save_local(elic$quant1,paste(pros$password,"_lows_for_part2.csv", sep=""))
+      f_save_local(elic$quant3,paste(pros$password,"_highs_for_part2.csv", sep=""))
+      
       
       temp1<-buttons$next_que1
       
@@ -1045,12 +1107,12 @@ shinyServer(function(input, output, clientData, session) {
   
   observeEvent(input$next_que2,{
 
-    f_saveData(c(elic$prop_min, elic$prop_max),paste(password_saves, "_part2_que", elic$que2,".csv", sep=""))
-    f_saveData(c(11,elic$que2), paste(password_saves,"_last_tab.csv", sep=""))
+    f_saveData(c(elic$prop_min, elic$prop_max),paste(pros$password, "_part2_que", elic$que2,".csv", sep=""))
+    f_save_local(c(11,elic$que2), paste(pros$password,"_last_tab.csv", sep=""))
     
     if(length(input$comment_que2)>0){
       if(input$comment_que2!=""){
-        f_saveData(input$comment_que2,paste(password_saves, "_comment_part2_que", elic$que2,".csv", sep=""))
+        f_saveData(input$comment_que2,paste(pros$password, "_comment_part2_que", elic$que2,".csv", sep=""))
       }
     }
         
@@ -1104,35 +1166,17 @@ shinyServer(function(input, output, clientData, session) {
         cond$good_fit1 <- 0
       } else {
         cond$good_fit1 <- 1
-        elic$upper1<-round(pgamma(elic$quant3[elic$que2], shape = elic$gamma1[1], scale = elic$gamma1[2])*100,digits=0)
+        elic$upper1<-100-round(pgamma(elic$quant3[elic$que2], shape = elic$gamma1[1], scale = elic$gamma1[2])*100,digits=0)
       }
       
       if (is.na(elic$gamma2[1])){
         cond$good_fit2 <- 0
       } else {
         cond$good_fit2 <- 1
-        elic$upper2<-round(pgamma(elic$quant3[elic$que2], shape = elic$gamma2[1], scale = elic$gamma2[2])*100,digits=0)
+        elic$upper2<-100-round(pgamma(elic$quant3[elic$que2], shape = elic$gamma2[1], scale = elic$gamma2[2])*100,digits=0)
       }
       
-    }#
-    
-    # } else if (cond$prop_min_max==1 & cond$prop_small==0){
-    #   
-    #   elic$quant1<-round(0.5 * (elic$quant2+elic$mini),digits=1)
-    #   elic$quant1<-elic$quant1*1.25
-    #   elic$prop_min<-integer(0)
-    #   elic$prop_max<-integer(0)
-    #   buttons$fback_que2<-0
-    #   
-    # } else if (cond$prop_min_max==1 & cond$prop_large==0){
-    #   
-    #   elic$quant1<-round(0.5 * (elic$quant2+elic$mini),digits=1)
-    #   elic$quant1<-elic$quant1*0.5
-    #   elic$prop_min<-integer(0)
-    #   elic$prop_max<-integer(0)
-    #   buttons$fback_que2<-0
-    #   
-    # }
+    }
     
 
   })
@@ -1199,7 +1243,7 @@ shinyServer(function(input, output, clientData, session) {
       elic$quant1[elic$que1]<-round(0.5 * (elic$quant2[elic$que1]+elic$mini),digits=0)
       elic$quant3[elic$que1]<-round(0.5 * (elic$quant2[elic$que1]+elic$maxi),digits=0)
       
-      if(elic$quant2-elic$quant1<2){
+      if(elic$quant2[elic$que1]-elic$quant1[elic$que1]<2){
         temp<-elic$quant1
         if(temp-1>0){
           elic$quant1<-temp-1 
@@ -1307,7 +1351,7 @@ shinyServer(function(input, output, clientData, session) {
     output$questions1<-renderUI({
       
       tagList(div(
-        strong(paste("Question ", elic$que1," of ",n_que,sep="")), br(), br(),
+        strong(paste("Question ", elic$que1," of ",n_que, sep="")), br(), br(),
         strong(t_questions1[elic$que1]),br(),br(),#elic$que1,n_que,buttons$next_tab,cond$all_chips_2,
         ifelse(buttons$skip_que1[elic$que1]==0,
                tagList(div(t_skip_que1)),
@@ -1377,15 +1421,32 @@ shinyServer(function(input, output, clientData, session) {
     
   output$intro_text<-renderUI({
     
-    if (buttons$next_tab==0){
-      tagList(div(t_introduction,
-                  #t_session_timeout,
-                  style='width:800px; padding-left:50px;'))
+    if(buttons$next_tab==-1){
+      tagList(div(
+        ifelse(buttons$first_time==0,
+               tagList(div(t_session_timeout,)),
+               ifelse(buttons$first_time==1,
+                      tagList(div(br(),br(),
+                                  fluidRow(column(9,f_session_timeout_new1(pros$password)),
+                                           column(2,f_nexttab("Next"))))),
+                      tagList(div(t_session_timeout_new2,
+                                  ifelse(pros$correct==0,
+                                         "",
+                                         tagList(div("The pass code you have entered in incorrect. Please enter the code again. If this is the first time you are attempting the exercise, 
+                                                     please refresh the page."))))))),
+        style='width:800px; padding-left:50px;'
+      ))
+    } else if (buttons$next_tab==0){
+      tagList(div(
+        t_introduction,
+        style='width:800px; padding-left:50px;'))
     } else if (buttons$next_tab==1){
-      tagList(div(t_welcome,
-                  style='width:800px; padding-left:50px;'))
+      tagList(div(
+        t_welcome,
+        style='width:800px; padding-left:50px;'))
     } else if (buttons$next_tab==2){
-      tagList(div(t_about_you,style='width:800px; padding-left:50px;'))
+      tagList(div(
+        t_about_you,style='width:800px; padding-left:50px;'))
     } else if (buttons$next_tab==3){
       tagList(div(
         t_type_of_que,
@@ -1487,20 +1548,12 @@ shinyServer(function(input, output, clientData, session) {
            HTML("<div style='height: 380px;'>"),
            imageOutput("gamma_p_40"),
            HTML("</div>"),
+           br(),
            t_que2_intro2,
            f_questions2(13,11,"a GP appointment lasts, on average,","GP appointments"), br(),
            f_text_props(elic$prop_min,elic$prop_max),
            #t_que2_instructions,
-           t_que2_instructions1, br(), 
-           # fluidRow(
-           #   column(6,
-           #          HTML("<div style='height: 350px;'>"),
-           #          imageOutput("gamma_p_20_outliers"), 
-           #          HTML("</div>")),
-           #   column(6,
-           #          HTML("<div style='height: 350px;'>"),
-           #          imageOutput("gamma_p_40_outliers"), 
-           #          HTML("</div>"))),
+           t_que2_instructions1, br(),
            HTML("<div style='height: 380px;'>"),
            imageOutput("gamma_p_20_outliers"),
            HTML("</div>"),
